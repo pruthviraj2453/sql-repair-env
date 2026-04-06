@@ -45,9 +45,9 @@ from client import SqlRepairEnv
 # Configuration
 # ---------------------------------------------------------------------------
 
-API_BASE_URL: str = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
-HF_TOKEN: str = os.getenv("HF_TOKEN") or os.getenv("API_KEY") or ""
-MODEL_NAME: str = os.getenv("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
+API_BASE_URL: str = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
+MODEL_NAME: str = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
+HF_TOKEN: str = os.getenv("HF_TOKEN")
 
 client = OpenAI(
     base_url=API_BASE_URL,
