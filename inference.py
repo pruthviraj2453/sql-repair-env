@@ -213,7 +213,7 @@ def run_episode(
     # Initialize state BEFORE try block so finally always has valid values.
     rewards: List[float] = []
     step_num: int = 0
-    final_score: float = 0.0
+    final_score: float = 0.01
 
     log_start(task=task_name, env=BENCHMARK, model=MODEL_NAME)
 
@@ -291,6 +291,9 @@ def run_episode(
                 _retry_message(score, result["message"], result["agent_rows"], result["expected_rows"])
             )
     finally:
+        # Clamp all values to strict (0, 1) for validator compliance.
+        final_score = max(0.01, min(0.99, final_score))
+        rewards = [max(0.01, min(0.99, r)) for r in rewards]
         success = final_score >= 0.99
         log_end(success=success, steps=step_num, score=final_score, rewards=rewards)
 
@@ -346,8 +349,8 @@ def main() -> None:
                     f"[WARN] episode {episode_num} (seed={seed}) failed: {ep_err}",
                     flush=True,
                 )
-                # Record a zero score for the peeked task so we don't retry forever.
-                task_scores[task_name].append(0.0)
+                # Record a floor score for the peeked task so we don't retry forever.
+                task_scores[task_name].append(0.01)
             seed += 1
 
     # ---- Summary -----------------------------------------------------------
@@ -391,9 +394,15 @@ def main() -> None:
     print("=" * 60, flush=True)
 
     # Exit code: 0 if at least one task was solved perfectly, else 1.
-    perfect = any(1.0 in scores for scores in task_scores.values())
+    perfect = any(s >= 0.99 for scores in task_scores.values() for s in scores)
     sys.exit(0 if perfect else 1)
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except SystemExit:
+        raise
+    except Exception as e:
+        print(f"[FATAL] {e}", flush=True)
+        sys.exit(1)
