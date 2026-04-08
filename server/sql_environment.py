@@ -958,14 +958,14 @@ def _score(
     The final score is always clamped to [0.0, 1.0].
     """
     if is_syntax_error:
-        return 0.0, "SQL syntax error — query did not execute."
+        return 0.01, "SQL syntax error — query did not execute."
 
     if agent_rows == expected_rows:
-        return 1.0, "Perfect match! All rows and columns are correct."
+        return 0.99, "Perfect match! All rows and columns are correct."
 
     # Both empty — technically a match but edge case
     if not expected_rows and not agent_rows:
-        return 1.0, "Both queries returned no rows — match."
+        return 0.99, "Both queries returned no rows — match."
 
     # Agent returned nothing but expected had rows
     if not agent_rows and expected_rows:
@@ -1033,7 +1033,7 @@ def _score(
         + 0.25 * col_score
         + 0.15 * count_ratio
     )
-    score = max(0.1, min(1.0, round(raw, 4)))
+    score = max(0.1, min(0.99, round(raw, 4)))
 
     # Build message
     parts = []
@@ -1242,7 +1242,7 @@ class SqlRepairEnvironment(MCPEnvironment):
 
             if self._conn is None:
                 return {
-                    "score": 0.0,
+                    "score": 0.01,
                     "message": "Environment not ready. Call reset() before submit_fix().",
                     "agent_rows": [],
                     "expected_rows": [],
@@ -1258,13 +1258,13 @@ class SqlRepairEnvironment(MCPEnvironment):
                 if done:
                     self._done = True
                 return {
-                    "score": 0.0,
+                    "score": 0.01,
                     "message": "Empty SQL submission.",
                     "agent_rows": [],
                     "expected_rows": self._expected_rows,
                     "done": done,
                     "steps_remaining": max(0, self._max_steps - self._step_submissions),
-                    "reward_delta": 0.0 - self._best_score,
+                    "reward_delta": 0.0,
                 }
 
             self._step_submissions += 1
@@ -1278,7 +1278,7 @@ class SqlRepairEnvironment(MCPEnvironment):
             try:
                 agent_rows = _run_query(self._conn, sql)
             except sqlite3.Error as exc:
-                score = 0.0  # syntax error gets 0.0
+                score = 0.01  # syntax error gets 0.01
                 self._last_score = score
                 done = (self._step_submissions >= self._max_steps)
                 if done:
@@ -1302,21 +1302,21 @@ class SqlRepairEnvironment(MCPEnvironment):
                     "Submitted the original broken query unchanged. "
                     "Try to fix the bugs described in the task."
                 )
-            elif raw_score == 1.0:
-                # Perfect score — no baseline adjustment needed
-                score = 1.0
             elif self._baseline_score < 1.0 and self._baseline_score > 0.0:
                 # Baseline adjustment: subtract the broken query's free score
                 # so improvements are measured relative to the broken baseline
                 adjusted = max(0.0, (raw_score - self._baseline_score) / (1.0 - self._baseline_score))
-                score = max(0.1, min(1.0, round(adjusted, 4)))
+                score = max(0.1, min(0.99, round(adjusted, 4)))
             else:
                 score = raw_score
+
+            # Clamp to strict (0, 1) — validator rejects 0.0 and 1.0
+            score = max(0.01, min(0.99, score))
 
             self._last_score = score
             self._best_score = max(self._best_score, score)
 
-            done = (score == 1.0) or (self._step_submissions >= self._max_steps)
+            done = (score >= 0.99) or (self._step_submissions >= self._max_steps)
             if done:
                 self._done = True
             reward_delta = score - prev_best
